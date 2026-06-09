@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matriz de Esforço x Impacto – DAPE/SPGF/SEF-MG</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    color: white; padding: 18px 28px; display: flex; align-items: center; gap: 16px;
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  header p { font-size: 0.78rem; opacity: 0.7; margin-top: 2px; }
+  .badge { background: #e94560; color: white; border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; font-weight: 700; }
+
+  .controls {
+    background: white; padding: 14px 28px; display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; border-bottom: 1px solid #e0e0e0; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  }
+  .controls label { font-size: 0.78rem; font-weight: 600; color: #555; }
+  select, button {
+    padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc;
+    font-size: 0.8rem; background: white; cursor: pointer;
+  }
+  select:focus { outline: none; border-color: #0f3460; }
+  .btn-reset { background: #0f3460; color: white; border: none; font-weight: 600; }
+  .btn-reset:hover { background: #e94560; }
+
+  .legend-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .chip {
+    display: flex; align-items: center; gap: 5px; padding: 4px 10px;
+    border-radius: 20px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    border: 2px solid transparent; transition: all 0.15s;
+  }
+  .chip.inactive { opacity: 0.35; }
+  .chip-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  .main { display: flex; gap: 0; height: calc(100vh - 130px); }
+
+  /* MATRIX */
+  .matrix-wrap { flex: 1; padding: 20px 16px 16px 20px; display: flex; flex-direction: column; }
+  .matrix-title { font-size: 0.82rem; font-weight: 700; color: #555; margin-bottom: 8px; text-align: center; }
+  .matrix-outer { position: relative; flex: 1; }
+  .axis-y { position: absolute; left: -16px; top: 50%; transform: translateY(-50%) rotate(-90deg);
+    font-size: 0.7rem; font-weight: 700; color: #888; white-space: nowrap; }
+  .axis-x { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+    font-size: 0.7rem; font-weight: 700; color: #888; white-space: nowrap; }
+
+  .matrix-grid {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+    width: 100%; height: 100%; border: 2px solid #ccc; border-radius: 10px; overflow: hidden;
+  }
+  .quadrant {
+    position: relative; padding: 8px; overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .q1 { background: #fff8e1; }  /* alto impacto, baixo esforço - FAZER LOGO */
+  .q2 { background: #e8f5e9; }  /* alto impacto, alto esforço - PLANEJAR */
+  .q3 { background: #fce4ec; }  /* baixo impacto, baixo esforço - QUICK WINS */
+  .q4 { background: #f3e5f5; }  /* baixo impacto, alto esforço - REPENSAR */
+
+  .q-label {
+    position: absolute; top: 6px; left: 8px;
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.05em;
+    opacity: 0.5; text-transform: uppercase; pointer-events: none;
+  }
+  .q1 .q-label { color: #f57f17; }
+  .q2 .q-label { color: #2e7d32; }
+  .q3 .q-label { color: #c62828; }
+  .q4 .q-label { color: #6a1b9a; }
+
+  .q-sublabel { font-size: 0.56rem; opacity: 0.4; font-weight: 600; pointer-events: none; }
+
+  .demand-node {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 800; color: white;
+    cursor: pointer; transition: all 0.2s; border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 2;
+  }
+  .demand-node:hover { transform: translate(-50%, -50%) scale(1.3); z-index: 10; }
+  .demand-node.selected { transform: translate(-50%, -50%) scale(1.4); z-index: 10; box-shadow: 0 0 0 3px #1a1a2e; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 320px; background: white; border-left: 1px solid #e0e0e0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-header {
+    background: #1a1a2e; color: white; padding: 14px 16px;
+    font-size: 0.85rem; font-weight: 700;
+  }
+  .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+
+  .demand-card {
+    background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 10px;
+    border-left: 4px solid #ccc; cursor: pointer; transition: all 0.15s;
+  }
+  .demand-card:hover { background: #e8edf5; }
+  .demand-card.selected { background: #e3eaf5; border-left-color: #0f3460; }
+  .demand-card .card-id { font-size: 0.65rem; font-weight: 800; color: #888; }
+  .demand-card .card-area { font-size: 0.65rem; color: white; background: #0f3460;
+    padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
+  .demand-card .card-title { font-size: 0.75rem; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; }
+  .demand-card .card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 0.6rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; color: white;
+  }
+  .tag-snow { background: #0ea5e9; }
+  .tag-auto { background: #10b981; }
+  .tag-db   { background: #8b5cf6; }
+  .tag-dev  { background: #f59e0b; color: #1a1a2e; }
+  .tag-cap  { background: #64748b; }
+
+  /* Detail panel */
+  .detail-panel {
+    background: #fff; border-top: 1px solid #e0e0e0; padding: 14px 16px; max-height: 280px; overflow-y: auto;
+  }
+  .detail-panel h3 { font-size: 0.85rem; font-weight: 800; color: #0f3460; margin-bottom: 8px; }
+  .detail-row { display: flex; margin-bottom: 5px; gap: 8px; }
+  .detail-row .dr-label { font-size: 0.68rem; font-weight: 700; color: #888; min-width: 90px; }
+  .detail-row .dr-val { font-size: 0.72rem; color: #1a1a2e; }
+  .no-sel { color: #aaa; font-size: 0.8rem; padding: 20px; text-align: center; }
+
+  /* sliders */
+  .slider-wrap { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .slider-wrap label { font-size: 0.68rem; font-weight: 700; color: #555; min-width: 60px; }
+  input[type=range] { flex: 1; accent-color: #0f3460; }
+  .slider-val { font-size: 0.72rem; font-weight: 700; color: #0f3460; min-width: 18px; text-align: right; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #f0f2f5; }
+  ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🎯 Matriz de Esforço × Impacto — DAPE / SPGF / SEF-MG</h1>
+    <p>Arraste os pontos ou ajuste os sliders para reposicionar as demandas</p>
+  </div>
+  <span class="badge">38 demandas</span>
+</header>
+
+<div class="controls">
+  <label>Área:</label>
+  <select id="filterArea">
+    <option value="">Todas</option>
+    <option>DCTA</option><option>DCB</option><option>DP</option>
+    <option>GABINETE</option><option>DIAR</option><option>ATJ</option>
+  </select>
+  <label>Tipo:</label>
+  <select id="filterTipo">
+    <option value="">Todos</option>
+    <option value="snow">ServiceNow</option>
+    <option value="auto">Automação/RPA</option>
+    <option value="db">Banco de Dados</option>
+    <option value="dev">Desenvolvimento</option>
+    <option value="cap">Capacitação</option>
+  </select>
+  <label>Urgência:</label>
+  <select id="filterUrg">
+    <option value="">Todas</option>
+    <option value="alta">Alta</option>
+    <option value="media">Média</option>
+    <option value="baixa">Baixa</option>
+  </select>
+  <button class="btn-reset" onclick="resetAll()">↺ Resetar Posições</button>
+
+  <div class="legend-chips" id="legendChips">
+    <div class="chip" data-tipo="snow" onclick="toggleChip(this)">
+      <div class="chip-dot" style="background:#0ea5e9"></div> ServiceNow
+    </div>
+    <div class="chip" data-tipo="auto" onclick="toggleChip(this)">
+      <div class="chip-dot" style="background:#10b981"></div> Automação/RPA
+    </div>
+    <div class="chip" data-tipo="db" onclick="toggleChip(this)">
+      <div class="chip-dot" style="background:#8b5cf6"></div> Banco de Dados
+    </div>
+    <div class="chip" data-tipo="dev" onclick="toggleChip(this)">
+      <div class="chip-dot" style="background:#f59e0b"></div> Desenvolvimento
+    </div>
+    <div class="chip" data-tipo="cap" onclick="toggleChip(this)">
+      <div class="chip-dot" style="background:#64748b"></div> Capacitação
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="matrix-wrap">
+    <div class="matrix-title">← Baixo Esforço &nbsp;&nbsp;|&nbsp;&nbsp; Alto Esforço →&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑ Alto Impacto</div>
+    <div class="matrix-outer">
+      <div class="matrix-grid" id="matrixGrid">
+        <!-- Q1: alto impacto, baixo esforço (top-left) -->
+        <div class="quadrant q1" id="q-q1">
+          <div class="q-label">⚡ Fazer logo<br><span class="q-sublabel">Alto Impacto · Baixo Esforço</span></div>
+        </div>
+        <!-- Q2: alto impacto, alto esforço (top-right) -->
+        <div class="quadrant q2" id="q-q2">
+          <div class="q-label">📋 Planejar<br><span class="q-sublabel">Alto Impacto · Alto Esforço</span></div>
+        </div>
+        <!-- Q3: baixo impacto, baixo esforço (bottom-left) -->
+        <div class="quadrant q3" id="q-q3">
+          <div class="q-label">🔧 Quick Wins<br><span class="q-sublabel">Baixo Impacto · Baixo Esforço</span></div>
+        </div>
+        <!-- Q4: baixo impacto, alto esforço (bottom-right) -->
+        <div class="quadrant q4" id="q-q4">
+          <div class="q-label">⚠️ Repensar<br><span class="q-sublabel">Baixo Impacto · Alto Esforço</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">📋 Demandas</div>
+    <div class="sidebar-content" id="sidebarList"></div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="no-sel">Clique em uma demanda para ver detalhes</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// DATA
+// ──────────────────────────────────────────────
+// impacto: 1=baixo, 2=médio, 3=alto
+// esforço: 1=baixo, 2=médio, 3=alto
+// tipos: snow=ServiceNow, auto=Automação, db=BancoDados, dev=Desenvolvimento, cap=Capacitação
+// Posição inicial derivada dos campos da planilha + análise contextual
+
+const demands = [
+  { id:1,  area:"DP",      titulo:"Automatizar pagamento de Jetons",                    descricao:"Automatizar o lançamento, taxação e anexos de Jetons no SEI.",                                                         impacto:2, esforco:2, urgencia:"baixa",  tipos:["auto","snow"],   processo:"Pagamento de Jetons", solucao:"Automatizar lançamento/taxação/anexos no SEI." },
+  { id:2,  area:"DCTA",    titulo:"Automação de lançamento de Férias-Prêmio (15/30)",   descricao:"Automatizar lançamento de férias-prêmio no SISAP.",                                                                     impacto:2, esforco:2, urgencia:"alta",   tipos:["auto","snow"],   processo:"Férias Prêmio", solucao:"Service Now / Automação de extração SISAP." },
+  { id:3,  area:"DCTA",    titulo:"Automatizar anulação no SISAP",                      descricao:"Automatizar lançamento da anulação/retificação de férias-prêmio no SISAP e FH01.",                                      impacto:2, esforco:2, urgencia:"alta",   tipos:["auto"],          processo:"Anulação e Retificação de Férias-Prêmio", solucao:"Automatizar lançamento + IA no SISAP/FH01." },
+  { id:4,  area:"DCTA",    titulo:"Atualização automática de dados pessoais (SEI→SISAP)",descricao:"Dados lançados manualmente pela DCB no FH01 e SISAP. Sujeito a erros.",                                                impacto:1, esforco:3, urgencia:"baixa",  tipos:["auto","db"],     processo:"Todos procedimentos DCTA", solucao:"Robô para leitura de docs SEI e atualização dos sistemas." },
+  { id:5,  area:"DCTA",    titulo:"Automação lançamentos IOF/MG (quinquênio, férias-prêmio)", descricao:"Lançamentos do IOF/MG realizados de forma manual (retirados BO).",                                               impacto:2, esforco:2, urgencia:"media",  tipos:["auto"],          processo:"Publicações IOF/MG", solucao:"Automatizar lançamento no SISAP/FH01 com IA." },
+  { id:6,  area:"DCTA",    titulo:"Automação lançamentos IOF/MG (abono, afastamento, conversão)", descricao:"Lançamentos manuais retirados do SEI para quinquênio, férias, abono, afastamento, conversão.",               impacto:2, esforco:2, urgencia:"media",  tipos:["auto"],          processo:"Lançamento no SISAP e FH01", solucao:"Automatizar lançamento + IA no SISAP/FH01." },
+  { id:7,  area:"DCTA",    titulo:"Preenchimento automático de dados nos docs SEI",     descricao:"Preenchimento manual de dados pessoais em documentos inseridos no SEI (ex: CTC).",                                     impacto:1, esforco:2, urgencia:"media",  tipos:["auto","snow"],   processo:"Todos procedimentos DCTA (Ofício, Certidão...)", solucao:"Automatizar lançamento de dados no momento de inserção ao SEI." },
+  { id:8,  area:"DCTA",    titulo:"Digitalização de pastas e fichas funcionais",        descricao:"Pastas e fichas físicas com documentos sensíveis encaminhadas para DAPE.",                                              impacto:3, esforco:3, urgencia:"alta",   tipos:["dev"],           processo:"Todos procedimentos DCTA", solucao:"Digitalização de pastas e fichas funcionais." },
+  { id:9,  area:"DCTA",    titulo:"Relatório automatizado de progressão/promoção",      descricao:"Planilha Excel manual com dados extraídos do BO sobre progressão e promoção.",                                         impacto:2, esforco:1, urgencia:"alta",   tipos:["auto","db"],     processo:"Progressão e Promoção", solucao:"Relatório automatizado com data, afastamentos, notas, previsão." },
+  { id:10, area:"DCTA",    titulo:"Automação gabarito IOF/MG (progressão/promoção)",    descricao:"Gabarito IOF/MG e lançamento feitos manualmente no SISAP e FH01.",                                                      impacto:2, esforco:2, urgencia:"media",  tipos:["auto"],          processo:"Progressão e Promoção", solucao:"Confecção automatizada do gabarito IOF/MG e lançamento nos sistemas." },
+  { id:11, area:"GABINETE",titulo:"Sistema de gestão de demandas (substituir planilhas)",descricao:"Controles manuais com planilhas para gestão de demandas.",                                                             impacto:3, esforco:2, urgencia:"alta",   tipos:["snow","dev"],    processo:"Controle e Gestão de Demandas", solucao:"Sistema de gestão de demandas (ServiceNow)." },
+  { id:12, area:"GABINETE",titulo:"BI para análise e monitoramento de demandas",        descricao:"Sem indicadores para análise e monitoramento das demandas executadas.",                                                impacto:3, esforco:2, urgencia:"alta",   tipos:["dev","db"],      processo:"Análise e Monitoramento", solucao:"Desenvolvimento de BI/Dashboard." },
+  { id:13, area:"DCTA",    titulo:"Robô para filtrar MASP por secretaria (SEI)",        descricao:"SEIs de outras secretarias chegam para DAPE indevidamente.",                                                            impacto:1, esforco:1, urgencia:"baixa",  tipos:["auto"],          processo:"Todos procedimentos DCTA", solucao:"Robô para filtrar MASP e verificar se servidor pertence à SEF." },
+  { id:14, area:"DCTA",    titulo:"Padronização de requerimentos DCTA",                 descricao:"Requerimentos recebidos com justificativas confusas.",                                                                   impacto:1, esforco:1, urgencia:"baixa",  tipos:["dev","snow"],    processo:"Todos procedimentos DCTA", solucao:"Padronização de requerimento por assunto, sem campo aberto." },
+  { id:15, area:"DCTA",    titulo:"Sistema para consulta de CTC já emitida (SEPLAG)",   descricao:"CTC solicitada e depois descoberta como já emitida pela SEPLAG, gerando retrabalho.",                                  impacto:2, esforco:1, urgencia:"media",  tipos:["dev","db"],      processo:"Certidão de Tempo de Contribuição", solucao:"Sistema para busca de CTC já emitida." },
+  { id:16, area:"DCTA",    titulo:"Automatizar lançamento de aposentadorias (SEPLAG→SISAP)", descricao:"Lançamento manual de aposentadorias publicadas pela SEPLAG no SISAP e emissão de IA.",                           impacto:2, esforco:2, urgencia:"media",  tipos:["auto"],          processo:"Taxação, IA e Anexos no SEI", solucao:"Automação do processo." },
+  { id:17, area:"DCTA",    titulo:"Atualização do simulador de aposentadoria",          descricao:"Simulador desatualizado para novos servidores e novas regras de aposentadoria.",                                        impacto:3, esforco:2, urgencia:"alta",   tipos:["dev"],           processo:"Levantamento de tempo, abono de permanência, mensagem e processo", solucao:"Apoio de TI para ajustes do simulador." },
+  { id:18, area:"DCTA",    titulo:"Projeto Aposenta SEF (planilha/painel)",             descricao:"Impacto no fornecimento de dados para LAI, planejamento da força de trabalho e pesquisas.",                           impacto:3, esforco:2, urgencia:"alta",   tipos:["dev","db"],      processo:"LAI, Planejamento de Força de Trabalho", solucao:"Apoio de TI para ajustes da planilha de aposentadoria." },
+  { id:19, area:"DCB",     titulo:"Sistema de confecção de certidões (SISAP)",          descricao:"Certidão solicitada manualmente na DCB.",                                                                               impacto:1, esforco:2, urgencia:"media",  tipos:["dev","db"],      processo:"Certidões", solucao:"Sistema para confecção de certidões buscando dados do SISAP." },
+  { id:20, area:"DCB",     titulo:"Sistema de controle funcional / força de trabalho",  descricao:"Sem sistema para controle funcional.",                                                                                  impacto:3, esforco:3, urgencia:"alta",   tipos:["dev","db"],      processo:"Controle Funcional", solucao:"Desenvolvimento de sistema de controle funcional." },
+  { id:21, area:"DCB",     titulo:"Automação lançamento ajuda de custo (robô)",         descricao:"Planilha manual de ajuda de custo mensal.",                                                                             impacto:3, esforco:1, urgencia:"alta",   tipos:["auto"],          processo:"Ajuda de Custo Mensal", solucao:"Lançamento dos acertos por robô." },
+  { id:22, area:"GABINETE",titulo:"Extração automática de processos SEI para planilha", descricao:"Controle manual de processos SEI recebidos.",                                                                           impacto:2, esforco:1, urgencia:"media",  tipos:["auto","snow"],   processo:"SEI", solucao:"Sistema de busca das informações recebidas via SEI transmitidas a planilha online." },
+  { id:23, area:"DP",      titulo:"Sistema de cálculo de atrasados (acertos SEPLAG)",   descricao:"Cálculo manual de atrasados conforme acertos enviados pela SEPLAG.",                                                    impacto:3, esforco:3, urgencia:"alta",   tipos:["dev"],           processo:"Lançamento para reflexos financeiros na vida do servidor", solucao:"Sistema de cálculos focado em cálculos atrasados." },
+  { id:24, area:"DCB",     titulo:"Sistema de controle de nomeação",                    descricao:"Planilha de controle de nomeação. Sistema similar ao dos auditores existe.",                                           impacto:3, esforco:2, urgencia:"alta",   tipos:["dev"],           processo:"Controle das nomeações", solucao:"Equiparar ao sistema criado pelos auditores." },
+  { id:25, area:"GABINETE",titulo:"Capacitação: Power BI",                              descricao:"Capacitação em Power BI para todos os processos da divisão.",                                                           impacto:3, esforco:1, urgencia:"media",  tipos:["cap"],           processo:"Todos os processos da divisão", solucao:"Treinamento/Capacitação." },
+  { id:26, area:"GABINETE",titulo:"Capacitação: IA para otimização do trabalho",        descricao:"Capacitação em IA para otimização do tempo e informações.",                                                             impacto:2, esforco:1, urgencia:"media",  tipos:["cap"],           processo:"Todos os processos na Divisão", solucao:"Curso/Treinamento." },
+  { id:27, area:"DCB",     titulo:"Sistema de controle de doação de sangue",            descricao:"Processo manual de doação de sangue / concessão do dia adicional.",                                                     impacto:1, esforco:1, urgencia:"baixa",  tipos:["dev","snow"],    processo:"Folga compensatória por doação de sangue", solucao:"Sistema/planilha que armazene requerimentos e concessões." },
+  { id:28, area:"GABINETE",titulo:"Capacitação: Curso de Power BI",                     descricao:"Desenvolvimento da equipe em Power BI.",                                                                                impacto:2, esforco:1, urgencia:"alta",   tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:29, area:"GABINETE",titulo:"Capacitação: Curso de Excel",                        descricao:"Desenvolvimento da equipe em Excel.",                                                                                   impacto:3, esforco:1, urgencia:"alta",   tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:30, area:"GABINETE",titulo:"Capacitação: Curso de Análise de Dados",             descricao:"Desenvolvimento da equipe em Análise de Dados.",                                                                        impacto:2, esforco:1, urgencia:"alta",   tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:31, area:"GABINETE",titulo:"Capacitação: Gestão de Risco",                       descricao:"Desenvolvimento da equipe em Gestão de Risco.",                                                                         impacto:2, esforco:1, urgencia:"media",  tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:32, area:"GABINETE",titulo:"Capacitação: LGPD",                                  descricao:"Desenvolvimento da equipe em Gestão de LGPD.",                                                                          impacto:3, esforco:1, urgencia:"alta",   tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:33, area:"GABINETE",titulo:"Capacitação: Introdução à IA",                       descricao:"Desenvolvimento da equipe em Introdução à IA.",                                                                         impacto:3, esforco:1, urgencia:"media",  tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:34, area:"DIAR",    titulo:"Agendamento online de atendimento a servidores",     descricao:"Atendimento feito 100% presencialmente. Sem agendamento online.",                                                      impacto:3, esforco:2, urgencia:"alta",   tipos:["snow","dev"],    processo:"Demandas do Atendimento", solucao:"Sistema para agendamento online e presencial." },
+  { id:35, area:"GABINETE",titulo:"Capacitação: Gestão de Pessoas",                     descricao:"Desenvolvimento da equipe em Gestão de Pessoas.",                                                                       impacto:2, esforco:1, urgencia:"media",  tipos:["cap"],           processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:36, area:"GABINETE",titulo:"Capacitação: ServiceNow",                            descricao:"Capacitação da equipe em ServiceNow.",                                                                                   impacto:3, esforco:1, urgencia:"alta",   tipos:["cap","snow"],    processo:"Desenvolvimento da equipe", solucao:"Curso/Treinamento." },
+  { id:37, area:"GABINETE",titulo:"Painel LAI – Transparência",                         descricao:"Solicitações de informações referente à LAI sem painel centralizado.",                                                 impacto:3, esforco:2, urgencia:"alta",   tipos:["dev","db"],      processo:"Transparência (LAI)", solucao:"Desenvolvimento de painel para atendimento das demandas da LAI." },
+  { id:38, area:"ATJ",     titulo:"Extração automática de dados SISAP (promoção escolaridade)", descricao:"Extração manual dos dados do servidor para processos de promoção por escolaridade judicial.",                 impacto:2, esforco:2, urgencia:"media",  tipos:["auto","db"],     processo:"Assessoria Técnico-Jurídica", solucao:"Sincronização dos dados do SISAP (evolução funcional, avaliação, formação, remuneração)." }
+];
+
+const TIPO_COLORS = {
+  snow: "#0ea5e9", auto: "#10b981", db: "#8b5cf6", dev: "#f59e0b", cap: "#64748b"
+};
+const TIPO_LABELS = {
+  snow: "ServiceNow", auto: "Automação/RPA", db: "Banco de Dados", dev: "Desenvolvimento", cap: "Capacitação"
+};
+
+// State: positions are in [0..1] relative to each quadrant
+// We store absolute x (0=left, 1=right) and y (0=top, 1=bottom) in the full matrix
+// Derived from impacto/esforco with some spread
+let positions = {};
+let selectedId = null;
+let hiddenTipos = new Set();
+let filters = { area: "", tipo: "", urgencia: "" };
+
+function initPositions() {
+  demands.forEach(d => {
+    if (!positions[d.id]) {
+      // esforco 1=low, 2=mid, 3=high → x: low=0.15..0.35, mid=0.4..0.6, high=0.65..0.85
+      // impacto 1=low, 2=mid, 3=high → y (inverted): high=0.05..0.35, mid=0.4..0.6, low=0.65..0.85
+      const ex = { 1: [0.05, 0.4], 2: [0.3, 0.7], 3: [0.6, 0.95] };
+      const ey = { 3: [0.05, 0.4], 2: [0.3, 0.7], 1: [0.6, 0.95] }; // impacto 3=top
+      const [x0, x1] = ex[d.esforco];
+      const [y0, y1] = ey[d.impacto];
+      // deterministic spread based on id
+      const rx = ((d.id * 7 + 13) % 23) / 23;
+      const ry = ((d.id * 11 + 5) % 19) / 19;
+      positions[d.id] = {
+        x: x0 + rx * (x1 - x0),
+        y: y0 + ry * (y1 - y0)
+      };
+    }
+  });
+}
+
+function tipoColor(tipos) {
+  return TIPO_COLORS[tipos[0]] || "#888";
+}
+
+function resetAll() {
+  positions = {};
+  initPositions();
+  render();
+}
+
+function toggleChip(el) {
+  const t = el.dataset.tipo;
+  if (hiddenTipos.has(t)) hiddenTipos.delete(t);
+  else hiddenTipos.add(t);
+  el.classList.toggle("inactive");
+  render();
+}
+
+function applyFilters() {
+  filters.area = document.getElementById("filterArea").value;
+  filters.tipo = document.getElementById("filterTipo").value;
+  filters.urgencia = document.getElementById("filterUrg").value;
+  render();
+}
+["filterArea","filterTipo","filterUrg"].forEach(id => {
+  document.getElementById(id).addEventListener("change", applyFilters);
+});
+
+function isVisible(d) {
+  if (filters.area && d.area !== filters.area) return false;
+  if (filters.tipo && !d.tipos.includes(filters.tipo)) return false;
+  if (filters.urgencia === "alta" && d.urgencia !== "alta") return false;
+  if (filters.urgencia === "media" && d.urgencia !== "media") return false;
+  if (filters.urgencia === "baixa" && d.urgencia !== "baixa") return false;
+  if (d.tipos.every(t => hiddenTipos.has(t))) return false;
+  return true;
+}
+
+function render() {
+  renderMatrix();
+  renderSidebar();
+  if (selectedId) renderDetail(demands.find(d => d.id === selectedId));
+}
+
+function renderMatrix() {
+  // Remove old nodes
+  document.querySelectorAll(".demand-node").forEach(n => n.remove());
+
+  const grid = document.getElementById("matrixGrid");
+  const rect = grid.getBoundingClientRect();
+
+  demands.forEach(d => {
+    if (!isVisible(d)) return;
+    const pos = positions[d.id];
+    const node = document.createElement("div");
+    node.className = "demand-node" + (selectedId === d.id ? " selected" : "");
+    node.style.background = tipoColor(d.tipos);
+    node.style.left = (pos.x * 100) + "%";
+    node.style.top = (pos.y * 100) + "%";
+    node.textContent = d.id;
+    node.title = d.titulo;
+    node.dataset.id = d.id;
+
+    // Click
+    node.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectDemand(d.id);
+    });
+
+    // Drag
+    let dragging = false, startX, startY, startPX, startPY;
+    node.addEventListener("mousedown", (e) => {
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      startPX = positions[d.id].x; startPY = positions[d.id].y;
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const gr = grid.getBoundingClientRect();
+      const dx = (e.clientX - startX) / gr.width;
+      const dy = (e.clientY - startY) / gr.height;
+      positions[d.id] = {
+        x: Math.max(0.01, Math.min(0.99, startPX + dx)),
+        y: Math.max(0.01, Math.min(0.99, startPY + dy))
+      };
+      render();
+    });
+    document.addEventListener("mouseup", () => { dragging = false; });
+
+    grid.appendChild(node);
+  });
+}
+
+function renderSidebar() {
+  const list = document.getElementById("sidebarList");
+  list.innerHTML = "";
+  const visible = demands.filter(isVisible);
+  if (visible.length === 0) {
+    list.innerHTML = "<div style='color:#aaa;font-size:0.8rem;padding:16px;text-align:center'>Nenhuma demanda visível com os filtros atuais.</div>";
+    return;
+  }
+  visible.forEach(d => {
+    const card = document.createElement("div");
+    card.className = "demand-card" + (selectedId === d.id ? " selected" : "");
+    card.style.borderLeftColor = tipoColor(d.tipos);
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span class="card-id">#${d.id}</span>
+        <span class="card-area">${d.area}</span>
+        <span style="margin-left:auto;font-size:0.62rem;color:${d.urgencia==='alta'?'#e94560':d.urgencia==='media'?'#f59e0b':'#888'};font-weight:700">
+          ${d.urgencia.toUpperCase()}
+        </span>
+      </div>
+      <div class="card-title">${d.titulo}</div>
+      <div class="card-tags">
+        ${d.tipos.map(t => `<span class="tag tag-${t}">${TIPO_LABELS[t]}</span>`).join("")}
+      </div>
+    `;
+    card.addEventListener("click", () => selectDemand(d.id));
+    list.appendChild(card);
+  });
+}
+
+function selectDemand(id) {
+  selectedId = (selectedId === id) ? null : id;
+  render();
+  if (selectedId) renderDetail(demands.find(d => d.id === id));
+  else document.getElementById("detailPanel").innerHTML = "<div class='no-sel'>Clique em uma demanda para ver detalhes</div>";
+  // Scroll card into view
+  const card = document.querySelector(`.demand-card[data-id="${id}"]`);
+  if (card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+// Fix missing data attr on card
+const origRenderSidebar = renderSidebar;
+
+function renderDetail(d) {
+  const pos = positions[d.id];
+  // x: low=esforco baixo, high=esforco alto; y: low=impacto alto, high=impacto baixo
+  const esforcoVal = Math.round(pos.x * 100);
+  const impactoVal = Math.round((1 - pos.y) * 100);
+
+  // Determine quadrant
+  const q = pos.x < 0.5
+    ? (pos.y < 0.5 ? "⚡ FAZER LOGO (Alto Impacto · Baixo Esforço)" : "🔧 Quick Win (Baixo Impacto · Baixo Esforço)")
+    : (pos.y < 0.5 ? "📋 PLANEJAR (Alto Impacto · Alto Esforço)" : "⚠️ REPENSAR (Baixo Impacto · Alto Esforço)");
+
+  document.getElementById("detailPanel").innerHTML = `
+    <h3>#${d.id} — ${d.titulo}</h3>
+    <div class="detail-row"><span class="dr-label">Área:</span><span class="dr-val">${d.area}</span></div>
+    <div class="detail-row"><span class="dr-label">Processo:</span><span class="dr-val">${d.processo}</span></div>
+    <div class="detail-row"><span class="dr-label">Descrição:</span><span class="dr-val">${d.descricao}</span></div>
+    <div class="detail-row"><span class="dr-label">Solução:</span><span class="dr-val">${d.solucao}</span></div>
+    <div class="detail-row"><span class="dr-label">Urgência:</span><span class="dr-val" style="font-weight:700;color:${d.urgencia==='alta'?'#e94560':d.urgencia==='media'?'#f59e0b':'#888'}">${d.urgencia.toUpperCase()}</span></div>
+    <div class="detail-row"><span class="dr-label">Tipo(s):</span><span class="dr-val">${d.tipos.map(t=>`<span class="tag tag-${t}" style="margin-right:3px">${TIPO_LABELS[t]}</span>`).join("")}</span></div>
+    <div class="detail-row"><span class="dr-label">Quadrante:</span><span class="dr-val" style="font-weight:600">${q}</span></div>
+    <div class="slider-wrap">
+      <label>Esforço</label>
+      <input type="range" min="1" max="100" value="${esforcoVal}" oninput="updatePos(${d.id},'x',this.value/100)">
+      <span class="slider-val" id="sv-x-${d.id}">${esforcoVal}</span>
+    </div>
+    <div class="slider-wrap">
+      <label>Impacto</label>
+      <input type="range" min="1" max="100" value="${impactoVal}" oninput="updatePos(${d.id},'y',1-this.value/100)">
+      <span class="slider-val" id="sv-y-${d.id}">${impactoVal}</span>
+    </div>
+  `;
+}
+
+function updatePos(id, axis, val) {
+  positions[id][axis] = Math.max(0.01, Math.min(0.99, val));
+  render();
+  // Update slider labels
+  const pos = positions[id];
+  const ex = document.getElementById(`sv-x-${id}`);
+  const ey = document.getElementById(`sv-y-${id}`);
+  if (ex) ex.textContent = Math.round(pos.x * 100);
+  if (ey) ey.textContent = Math.round((1 - pos.y) * 100);
+}
+
+// Patch sidebar to add data-id
+function renderSidebar2() {
+  const list = document.getElementById("sidebarList");
+  list.innerHTML = "";
+  const visible = demands.filter(isVisible);
+  if (visible.length === 0) {
+    list.innerHTML = "<div style='color:#aaa;font-size:0.8rem;padding:16px;text-align:center'>Nenhuma demanda visível com os filtros atuais.</div>";
+    return;
+  }
+  visible.forEach(d => {
+    const card = document.createElement("div");
+    card.className = "demand-card" + (selectedId === d.id ? " selected" : "");
+    card.style.borderLeftColor = tipoColor(d.tipos);
+    card.dataset.id = d.id;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span class="card-id">#${d.id}</span>
+        <span class="card-area">${d.area}</span>
+        <span style="margin-left:auto;font-size:0.62rem;color:${d.urgencia==='alta'?'#e94560':d.urgencia==='media'?'#f59e0b':'#888'};font-weight:700">
+          ${d.urgencia.toUpperCase()}
+        </span>
+      </div>
+      <div class="card-title">${d.titulo}</div>
+      <div class="card-tags">
+        ${d.tipos.map(t => `<span class="tag tag-${t}">${TIPO_LABELS[t]}</span>`).join("")}
+      </div>
+    `;
+    card.addEventListener("click", () => selectDemand(d.id));
+    list.appendChild(card);
+  });
+}
+
+// Override
+window.renderSidebar = renderSidebar2;
+
+function render() {
+  renderMatrix();
+  renderSidebar2();
+  if (selectedId) {
+    const d = demands.find(d => d.id === selectedId);
+    if (d && isVisible(d)) renderDetail(d);
+    else {
+      selectedId = null;
+      document.getElementById("detailPanel").innerHTML = "<div class='no-sel'>Clique em uma demanda para ver detalhes</div>";
+    }
+  }
+}
+
+initPositions();
+render();
+</script>
+</body>
+</html>
